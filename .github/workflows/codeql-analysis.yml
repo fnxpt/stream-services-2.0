@@ -1,14 +1,3 @@
-# For most projects, this workflow file will not need changing; you simply need
-# to commit it to your repository.
-#
-# You may wish to alter this file to override the set of languages analyzed,
-# or to provide custom queries or build logic.
-#
-# ******** NOTE ********
-# We have attempted to detect the languages in your repository. Please check
-# the `language` matrix defined below to confirm you have the correct set of
-# supported CodeQL languages.
-#
 name: "CodeQL"
 
 on:
@@ -29,14 +18,18 @@ jobs:
       fail-fast: false
       matrix:
         language: [ 'java', 'javascript' ]
-        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python' ]
-        # Learn more:
-        # https://docs.github.com/en/free-pro-team@latest/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#changing-the-languages-that-are-analyzed
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - uses: actions/cache@v1
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-m2
+        restore-keys: |
+          ${{ runner.os }}-m2
+          
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v1
@@ -54,6 +47,22 @@ jobs:
         plugin_repositories: '[{ "id": "backbase-plugins", "url": "https://repo.backbase.com/repo" }]'
         servers: '[{ "id": "backbase", "username": "${{ secrets.REPO_USERNAME }}", "password": "${{ secrets.REPO_PASSWORD }}" },{ "id": "backbase-plugins", "username": "${{ secrets.REPO_USERNAME }}", "password": "${{ secrets.REPO_PASSWORD }}" }]'
 
+    - name: Get version from POM
+      run: |
+        VERSION_PARTS=($(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | tr "." "\n"))
+        echo "MAJOR=${VERSION_PARTS[0]}" >> $GITHUB_ENV
+        echo "MINOR=${VERSION_PARTS[1]}" >> $GITHUB_ENV
+        echo "PATCH=${VERSION_PARTS[2]}" >> $GITHUB_ENV
+    - name: Setup release version
+      run: |
+        NEW_VERSION="$((MAJOR)).$((MINOR+1)).0"
+        echo "NEW_VERSION=${NEW_VERSION}" >> $GITHUB_ENV
+    - name: Update POM Version
+      run: |
+        echo "New version  is: $NEW_VERSION"
+        mvn versions:set versions:update-child-modules -DnewVersion=${NEW_VERSION} -DprocessAllModules -DgenerateBackupPoms=false
+    #- name: Build Stream Services
+    #  run: mvn clean install -B
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Autobuild
